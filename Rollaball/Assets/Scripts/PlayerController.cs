@@ -9,35 +9,33 @@ public class PlayerController : MonoBehaviour
 {
        // Rigidbody of the player.
        private Rigidbody rb; 
-
        // Variable to keep track of collected "PickUp" objects.
        private int count;
-
        // Movement along X and Y axes.
        private float movementX;
        private float movementY;
-
        // Speed at which the player moves.
-       public float speed = 0;
-
+       public float speed = 4;
        // UI text component to display count of "PickUp" objects collected.
        public TextMeshProUGUI countText;
-
        // UI object to display winning text.
        public GameObject winTextObject;
 
+
+       // Jump Parameters
+       private bool isGrounded; // A flag to check if the ball is on the ground.
+       private bool doubleJumpUsed = false; // A flag to ensure the double jump can only be used once while in the air. 
+       public float jumpForce = 1.5f; // The force applied when the ball jumps.
+
+
        // Start is called before the first frame update.
-       void Start()
-       {
+       void Start(){
        // Get and store the Rigidbody component attached to the player.
               rb = GetComponent<Rigidbody>();
-
        // Initialize count to zero.
               count = 0;
-
        // Update the count display.
               SetCountText();
-
        // Initially set the win text to be inactive.
               winTextObject.SetActive(false);
        }
@@ -61,8 +59,27 @@ public class PlayerController : MonoBehaviour
 
               // Apply force to the Rigidbody to move the player.
               rb.AddForce(movement * speed); 
+
+              // Jump - Check if the ball is grounded
+              isGrounded = Physics.Raycast(transform.position, Vector3.down, 0.5f);
+              if (isGrounded){
+                     doubleJumpUsed = false;
+              }
        }
 
+
+       // Method to handle jump input
+       void OnJump()
+       {
+              if (isGrounded || !doubleJumpUsed)
+              {
+                     // Apply jump force
+                     rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+                     if (!isGrounded){
+                            doubleJumpUsed = true;
+                     }
+              }
+       }
  
        void OnTriggerEnter(Collider other) 
        {
