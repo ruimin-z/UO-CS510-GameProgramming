@@ -51,5 +51,6 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "Rollaball.sln"
+    "dotnet.defaultSolution": "Rollaball.sln",
+    "git.ignoreLimitWarning": true
 }
