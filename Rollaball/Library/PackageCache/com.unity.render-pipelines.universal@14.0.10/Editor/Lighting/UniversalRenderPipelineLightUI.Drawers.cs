@@ -261,10 +261,32 @@ namespace UnityEditor.Rendering.Universal
                         SyncLightAndShadowLayers(serializedLight, serializedLight.renderingLayers);
                 }
             }
-            EditorGUILayout.PropertyField(serializedLight.settings.cullingMask, Styles.CullingMask);
+
+            var rendererList = UniversalRenderPipeline.asset.m_RendererDataList;
+            bool hasNonForwardPlusRenderer = false;
+            foreach (var r in rendererList)
+            {
+                if (r is UniversalRendererData ur)
+                {
+                    if (ur.renderingMode != RenderingMode.ForwardPlus)
+                    {
+                        hasNonForwardPlusRenderer = true;
+                        break;
+                    }
+                }
+                else
+                {
+                    hasNonForwardPlusRenderer = true;
+                    break;
+                }
+            }
+
+            GUI.enabled = hasNonForwardPlusRenderer;
+            EditorGUILayout.PropertyField(serializedLight.settings.cullingMask, hasNonForwardPlusRenderer ? Styles.CullingMask : Styles.CullingMaskDisabled);
+            GUI.enabled = true;
             if (serializedLight.settings.cullingMask.intValue != -1)
             {
-                EditorGUILayout.HelpBox(Styles.CullingMaskWarning.text, MessageType.Info);
+                EditorGUILayout.HelpBox(Styles.CullingMaskWarning.text, MessageType.Warning);
             }
         }
 

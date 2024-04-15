@@ -489,8 +489,6 @@ namespace UnityEngine.Rendering.Universal
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
-            if (UniversalRenderer.IsOffscreenDepthTexture(in renderingData.cameraData))
-                return;
             if (renderingData.cameraData.cameraType == CameraType.Preview)
             {
                 renderer.EnqueuePass(m_DecalPreviewPass);
@@ -533,8 +531,6 @@ namespace UnityEngine.Rendering.Universal
 
         public override void SetupRenderPasses(ScriptableRenderer renderer, in RenderingData renderingData)
         {
-            if (UniversalRenderer.IsOffscreenDepthTexture(renderingData.cameraData))
-                return;
             if (m_Technique == DecalTechnique.DBuffer)
             {
                 m_DBufferRenderPass.Setup(renderingData.cameraData);

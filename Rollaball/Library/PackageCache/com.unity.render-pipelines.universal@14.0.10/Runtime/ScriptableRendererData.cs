@@ -82,9 +82,7 @@ namespace UnityEngine.Rendering.Universal
         {
             SetDirty();
 #if UNITY_EDITOR
-            // Only validate ScriptableRendererFeatures when all scripts have finished compiling (to avoid false-negatives
-            // when ScriptableRendererFeatures haven't been compiled before this check).
-            if (!EditorApplication.isCompiling && m_RendererFeatures.Contains(null))
+            if (m_RendererFeatures.Contains(null))
                 ValidateRendererFeatures();
 #endif
         }

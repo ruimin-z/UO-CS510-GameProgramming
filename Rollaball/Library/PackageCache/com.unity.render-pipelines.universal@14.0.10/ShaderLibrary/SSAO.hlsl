@@ -13,7 +13,6 @@ TEXTURE2D_HALF(_BlueNoiseTexture);
 TEXTURE2D_X_HALF(_ScreenSpaceOcclusionTexture);
 
 SAMPLER(sampler_BlitTexture);
-float4 _CameraDepthTexture_TexelSize;
 
 // Params
 half4 _BlurOffset;

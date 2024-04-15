@@ -241,6 +241,7 @@ namespace UnityEngine.Rendering.Universal
 #endif
             m_DepthPrepass = new DepthOnlyPass(RenderPassEvent.BeforeRenderingPrePasses, RenderQueueRange.opaque, data.opaqueLayerMask);
             m_DepthNormalPrepass = new DepthNormalOnlyPass(RenderPassEvent.BeforeRenderingPrePasses, RenderQueueRange.opaque, data.opaqueLayerMask);
+            m_MotionVectorPass = new MotionVectorRenderPass(m_CameraMotionVecMaterial, m_ObjectMotionVecMaterial);
 
             if (renderingModeRequested == RenderingMode.Forward || renderingModeRequested == RenderingMode.ForwardPlus)
             {
@@ -282,16 +283,12 @@ namespace UnityEngine.Rendering.Universal
             m_RenderOpaqueForwardWithRenderingLayersPass = new DrawObjectsWithRenderingLayersPass(URPProfileId.DrawOpaqueObjects, true, RenderPassEvent.BeforeRenderingOpaques, RenderQueueRange.opaque, data.opaqueLayerMask, m_DefaultStencilState, stencilData.stencilReference);
 
             bool copyDepthAfterTransparents = m_CopyDepthMode == CopyDepthMode.AfterTransparents;
-            RenderPassEvent copyDepthEvent = copyDepthAfterTransparents ? RenderPassEvent.AfterRenderingTransparents : RenderPassEvent.AfterRenderingSkybox;
 
             m_CopyDepthPass = new CopyDepthPass(
-                copyDepthEvent,
+                copyDepthAfterTransparents ? RenderPassEvent.AfterRenderingTransparents : RenderPassEvent.AfterRenderingSkybox,
                 m_CopyDepthMaterial,
                 shouldClear: true,
-                copyResolvedDepth: RenderingUtils.MultisampleDepthResolveSupported() && SystemInfo.supportsMultisampleAutoResolve && copyDepthAfterTransparents);
-
-            // Motion vectors depend on the (copy) depth texture. Depth is reprojected to calculate motion vectors.
-            m_MotionVectorPass = new MotionVectorRenderPass(copyDepthEvent + 1, m_CameraMotionVecMaterial, m_ObjectMotionVecMaterial);
+                copyResolvedDepth: RenderingUtils.MultisampleDepthResolveSupported() && copyDepthAfterTransparents);
 
             m_DrawSkyboxPass = new DrawSkyboxPass(RenderPassEvent.BeforeRenderingSkybox);
             m_CopyColorPass = new CopyColorPass(RenderPassEvent.AfterRenderingSkybox, m_SamplingMaterial, m_BlitMaterial);
@@ -470,13 +467,6 @@ namespace UnityEngine.Rendering.Universal
             }
         }
 
-        /// <summary>
-        /// Returns if the camera renders to a offscreen depth texture.
-        /// </summary>
-        /// <param name="cameraData">The camera data for the camera being rendered.</param>
-        /// <returns>Returns true if the camera renders to depth without any color buffer. It will return false otherwise.</returns>
-        public static bool IsOffscreenDepthTexture(in CameraData cameraData) => cameraData.targetTexture != null && cameraData.targetTexture.format == RenderTextureFormat.Depth;
-
         bool IsDepthPrimingEnabled(ref CameraData cameraData)
         {
             // depth priming requires an extra depth copy, disable it on platforms not supporting it (like GLES when MSAA is on)
@@ -490,10 +480,8 @@ namespace UnityEngine.Rendering.Universal
             bool isFirstCameraToWriteDepth = cameraData.renderType == CameraRenderType.Base || cameraData.clearDepth;
             // Enabled Depth priming when baking Reflection Probes causes artefacts (UUM-12397)
             bool isNotReflectionCamera = cameraData.cameraType != CameraType.Reflection;
-            // Depth is not rendered in a depth-only camera setup with depth priming (UUM-38158)
-            bool isNotOffscreenDepthTexture = !IsOffscreenDepthTexture(cameraData);
 
-            return depthPrimingRequested && isForwardRenderingMode && isFirstCameraToWriteDepth && isNotReflectionCamera && isNotOffscreenDepthTexture && isNotWebGL;
+            return  depthPrimingRequested && isForwardRenderingMode && isFirstCameraToWriteDepth && isNotReflectionCamera && isNotWebGL;
         }
 
         bool IsWebGL()
@@ -528,7 +516,7 @@ namespace UnityEngine.Rendering.Universal
             if (DebugHandler != null)
             {
                 DebugHandler.Setup(context, ref renderingData);
-
+                
                 if (DebugHandler.IsActiveForCamera(ref cameraData))
                 {
                     if (DebugHandler.WriteToDebugScreenTexture(ref cameraData))
@@ -553,16 +541,16 @@ namespace UnityEngine.Rendering.Universal
             if (cameraData.cameraType != CameraType.Game)
                 useRenderPassEnabled = false;
 
-            // Because of the shortcutting done by depth only offscreen cameras, useDepthPriming must be computed early
-            useDepthPriming = IsDepthPrimingEnabled(ref cameraData);
-
             // Special path for depth only offscreen cameras. Only write opaques + transparents.
-            if (IsOffscreenDepthTexture(in cameraData))
+            bool isOffscreenDepthTexture = cameraData.targetTexture != null && cameraData.targetTexture.format == RenderTextureFormat.Depth;
+            if (isOffscreenDepthTexture)
             {
                 ConfigureCameraTarget(k_CameraTarget, k_CameraTarget);
                 SetupRenderPasses(in renderingData);
                 EnqueuePass(m_RenderOpaqueForwardPass);
 
+                // TODO: Do we need to inject transparents and skybox when rendering depth only camera? They don't write to depth.
+                EnqueuePass(m_DrawSkyboxPass);
 #if ADAPTIVE_PERFORMANCE_2_1_0_OR_NEWER
                 if (!needTransparencyPass)
                     return;
@@ -648,6 +636,7 @@ namespace UnityEngine.Rendering.Universal
             // TODO: We could cache and generate the LUT before rendering the stack
             bool generateColorGradingLUT = cameraData.postProcessEnabled && m_PostProcessPasses.isCreated;
             bool isSceneViewOrPreviewCamera = cameraData.isSceneViewCamera || cameraData.isPreviewCamera;
+            useDepthPriming = IsDepthPrimingEnabled(ref cameraData);
             // This indicates whether the renderer will output a depth texture.
             bool requiresDepthTexture = cameraData.requiresDepthTexture || renderPassInputs.requiresDepthTexture || m_DepthPrimingMode == DepthPrimingMode.Forced;
 
@@ -792,8 +781,6 @@ namespace UnityEngine.Rendering.Universal
                     CreateCameraRenderTarget(context, ref cameraTargetDescriptor, useDepthPriming, cmd, ref cameraData);
 
                 m_RenderOpaqueForwardPass.m_IsActiveTargetBackBuffer = !intermediateRenderTexture;
-                m_RenderTransparentForwardPass.m_IsActiveTargetBackBuffer = !intermediateRenderTexture;
-                m_DrawSkyboxPass.m_IsActiveTargetBackBuffer = !intermediateRenderTexture;
 #if ENABLE_VR && ENABLE_XR_MODULE
                 m_XROcclusionMeshPass.m_IsActiveTargetBackBuffer = !intermediateRenderTexture;
 #endif
@@ -1347,9 +1334,9 @@ namespace UnityEngine.Rendering.Universal
             {
                 // We don't add one to the maximum light because mainlight is treated as any other light.
                 cullingParameters.maximumVisibleLights = UniversalRenderPipeline.maxVisibleAdditionalLights;
-                // Do not sort reflection probe from engine it will come in reverse order from what we need.
-                cullingParameters.reflectionProbeSortingCriteria = ReflectionProbeSortingCriteria.None;
-            }
+                // Sort the reflection probes on trunk.
+                cullingParameters.reflectionProbeSortingCriteria = ReflectionProbeSortingCriteria.ImportanceThenSize;
+            }    
             else
             {
                 // We set the number of maximum visible lights allowed and we add one for the mainlight...
@@ -1460,10 +1447,7 @@ namespace UnityEngine.Rendering.Universal
 
             // Motion vectors imply depth
             if (inputSummary.requiresMotionVectors)
-            {
                 inputSummary.requiresDepthTexture = true;
-                inputSummary.requiresDepthTextureEarliestEvent = (RenderPassEvent)Mathf.Min((int)m_MotionVectorPass.renderPassEvent, (int)inputSummary.requiresDepthTextureEarliestEvent);
-            }
 
             return inputSummary;
         }
@@ -1498,9 +1482,7 @@ namespace UnityEngine.Rendering.Universal
                         if (IsDepthPrimingEnabled(ref cameraData))
                             depthDescriptor.bindMS = true;
                         else
-                            depthDescriptor.bindMS = !(RenderingUtils.MultisampleDepthResolveSupported() &&
-                                                       SystemInfo.supportsMultisampleAutoResolve &&
-                                                       m_CopyDepthMode == CopyDepthMode.AfterTransparents);
+                            depthDescriptor.bindMS = !(RenderingUtils.MultisampleDepthResolveSupported() && m_CopyDepthMode == CopyDepthMode.AfterTransparents);
                     }
 
                     // binding MS surfaces is not supported by the GLES backend, and it won't be fixed after investigating
