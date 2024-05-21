@@ -1,9 +1,6 @@
 [submodule "Homework2"]
 	path = Homework2
 	url = git@github.com:JackHanni/ScaredyCat.git
-[submodule "GroupProject"]
-	path = GroupProject
-	url = git@github.com:JackHanni/CashMoneyDash.git
 [submodule "Group_Project"]
 	path = Group_Project
 	url = git@github.com:JackHanni/CashMoneyDash.git
