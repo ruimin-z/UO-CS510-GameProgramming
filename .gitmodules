@@ -4,6 +4,6 @@
 [submodule "Group_Project"]
 	path = Group_Project
 	url = git@github.com:JackHanni/CashMoneyDash.git
-[submodule "GroupProject"]
-	path = GroupProject
-	url = git@github.com:JackHanni/CashMoneyDash.git
+[submodule "CashMoneyDash"]
+	path = CashMoneyDash
+	url = https://github.com/JackHanni/CashMoneyDash
